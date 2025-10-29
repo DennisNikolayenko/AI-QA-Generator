@@ -30,7 +30,7 @@
                 
                 <div class="space-y-2">
                     <label for="promptInput" class="block text-sm font-medium text-gray-700">Project Prompt / Goal</label>
-                    <textarea id="promptInput" rows="7" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" placeholder="e.g., Write a 500-word essay about the impact of generative AI on creative jobs, focusing on artists and writers."></textarea>
+                    <textarea id="promptInput" rows="7" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" placeholder="e.g., Generate a test project for a financial AI assistant."></textarea>
                 </div>
 
                 <!-- Removed System Instruction Input -->
@@ -46,35 +46,26 @@
                 </button>
 
                 <div id="statusMessage" class="min-h-12 p-3 text-sm rounded-lg border hidden transition duration-300"></div>
-
-                <div class="space-y-2 pt-2">
-                    <label class="block text-sm font-medium text-gray-700">Generated Output</label>
-                    <!-- NEW: Project Structure Display -->
-                    <div id="projectStructure" class="bg-gray-50 p-3 border border-gray-200 rounded-lg hidden space-y-2">
-                        <p class="font-semibold text-sm">Project Goal:</p>
-                        <p id="goalSummary" class="text-xs text-gray-600 mb-3"></p>
-                        <p class="font-semibold text-sm">Generated Artifact Files:</p>
-                        <div class="space-y-1">
-                            <div class="p-2 bg-white border border-gray-100 rounded-lg flex justify-between text-xs">
-                                <span class="font-mono text-gray-700">promptfooconfig.yaml</span>
-                                <span class="text-indigo-600 font-medium">Config File</span>
-                            </div>
-                            <div class="p-2 bg-white border border-gray-100 rounded-lg flex justify-between text-xs">
-                                <span class="font-mono text-gray-700">prompt.txt</span>
-                                <span class="text-indigo-600 font-medium">Prompt Template</span>
-                            </div>
-                            <div class="p-2 bg-white border border-gray-100 rounded-lg flex justify-between text-xs">
-                                <span class="font-mono text-gray-700">tests.csv</span>
-                                <span class="text-indigo-600 font-medium">Test Cases</span>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- OLD: Raw output display, now used as a fallback/detail view -->
-                    <pre id="outputContent" class="bg-gray-50 p-3 h-40 overflow-auto border border-gray-200 rounded-lg text-xs whitespace-pre-wrap"></pre>
-                </div>
-                
-                <button id="downloadButton" class="w-full py-2 px-4 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition duration-150 disabled:opacity-50" disabled onclick="downloadArtifacts()">Download Project (ZIP)</button>
             </div>
+        </div>
+
+        <!-- NEW SECTION 2: Generated Project Structure -->
+        <div id="section2" class="card p-6 rounded-xl mt-6 hidden">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">2. Generated Project Structure</h2>
+            
+            <p id="totalArtifactsSummary" class="font-bold text-lg text-gray-700 mb-4">Total Artifacts Generated: 0</p>
+
+            <div id="categoryList" class="space-y-3">
+                <!-- Categories will be rendered here by JavaScript -->
+            </div>
+
+            <div class="space-y-2 pt-6">
+                <label class="block text-sm font-medium text-gray-700">Raw Output Detail</label>
+                <!-- Raw output display, now used as a fallback/detail view -->
+                <pre id="outputContent" class="bg-gray-50 p-3 h-40 overflow-auto border border-gray-200 rounded-lg text-xs whitespace-pre-wrap"></pre>
+            </div>
+            
+            <button id="downloadButton" class="w-full mt-5 py-3 px-4 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition duration-150 disabled:opacity-50" disabled onclick="downloadArtifacts()">Download Project (ZIP)</button>
         </div>
     </div>
 
@@ -82,6 +73,14 @@
         // Global constant for the model
         const GENERATION_MODEL = 'gemini-2.5-flash-preview-09-2025';
 
+        // --- FIXED TEST CATEGORIES (As requested) ---
+        const TEST_CATEGORIES = [
+            'domain-and-financial-factuality',
+            'regulatory-compliance-adherence',
+            'data-privacy-security',
+            'customer-service-empathy'
+        ];
+        
         // --- DOM ELEMENTS ---
         const apiKeyInput = document.getElementById('apiKeyInput');
         const promptInput = document.getElementById('promptInput');
@@ -91,13 +90,11 @@
         const statusMessage = document.getElementById('statusMessage');
         const outputContent = document.getElementById('outputContent');
         const downloadButton = document.getElementById('downloadButton');
-        
-        // NEW DOM ELEMENTS
-        const projectStructure = document.getElementById('projectStructure');
-        const goalSummary = document.getElementById('goalSummary');
+        const categoryList = document.getElementById('categoryList');
+        const totalArtifactsSummary = document.getElementById('totalArtifactsSummary');
+        const section2 = document.getElementById('section2');
 
-
-        let generatedArtifacts = null; // Stores the JSON structure for download
+        let generatedArtifacts = null; // Stores the LLM's JSON output
 
         // --- UI FUNCTIONS ---
 
@@ -124,17 +121,34 @@
             outputContent.textContent = content;
         }
 
-        function showProjectStructure(artifacts) {
-            goalSummary.textContent = artifacts.projectGoal;
-            projectStructure.classList.remove('hidden');
-            outputContent.classList.remove('h-40');
-            outputContent.classList.add('h-24'); // Make raw output smaller when structure is visible
+        function renderProjectStructure(data) {
+            let totalArtifacts = 0;
+            categoryList.innerHTML = ''; // Clear previous content
+
+            TEST_CATEGORIES.forEach(category => {
+                const artifacts = data[category] || [];
+                const artifactCount = artifacts.length;
+                totalArtifacts += artifactCount;
+
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'p-3 bg-white border border-gray-200 rounded-lg flex justify-between items-center cursor-pointer hover:bg-indigo-50 transition duration-150';
+                categoryDiv.innerHTML = `
+                    <span class="font-medium text-gray-700">${category}</span>
+                    <span class="text-indigo-600 font-bold">${artifactCount} Artifacts</span>
+                `;
+                // Simple console log for click, as we don't have detail view functionality
+                categoryDiv.onclick = () => console.log(`Details for: ${category}\n`, artifacts);
+                categoryList.appendChild(categoryDiv);
+            });
+
+            totalArtifactsSummary.textContent = `Total Artifacts Generated: ${totalArtifacts}`;
+            section2.classList.remove('hidden');
         }
-        
+
         function hideProjectStructure() {
-            projectStructure.classList.add('hidden');
-            outputContent.classList.remove('h-24');
-            outputContent.classList.add('h-40');
+            section2.classList.add('hidden');
+            categoryList.innerHTML = '';
+            totalArtifactsSummary.textContent = 'Total Artifacts Generated: 0';
         }
 
 
@@ -163,36 +177,45 @@
             hideProjectStructure(); // Hide previous structure
 
             
-            // Define the JSON schema for the desired output (Promptfoo structure)
+            // Define the JSON schema for the desired output 
+            // The structure is now based on the fixed TEST_CATEGORIES
             const responseSchema = {
                 type: "OBJECT",
                 properties: {
-                    projectGoal: { type: "STRING", description: "A concise summary of the LLM's goal." },
-                    provider: { type: "STRING", description: "The default LLM provider ID for the generated config (e.g., openai:gpt-5-mini, vertex:gemini-2.5-flash)." },
-                    config: { 
-                        type: "STRING", 
-                        description: "The complete content for the promptfooconfig.yaml file (YAML format). Use 'openai:gpt-5-mini' as the default provider." 
+                    'domain-and-financial-factuality': { 
+                        type: "ARRAY", 
+                        items: { type: "OBJECT", properties: { filename: { type: "STRING" }, content: { type: "STRING" } } },
+                        description: "List of generated files (e.g., promptfooconfig.yaml, prompt.txt, tests.csv) related to this domain."
                     },
-                    prompts: { type: "STRING", description: "The content for a sample prompt file (e.g., prompt.txt or prompt.yaml)." },
-                    tests: { type: "STRING", description: "The content for a sample test file (e.g., tests.csv or tests.yaml)." }
+                    'regulatory-compliance-adherence': { 
+                        type: "ARRAY", 
+                        items: { type: "OBJECT", properties: { filename: { type: "STRING" }, content: { type: "STRING" } } },
+                        description: "List of generated files related to regulatory compliance."
+                    },
+                    'data-privacy-security': { 
+                        type: "ARRAY", 
+                        items: { type: "OBJECT", properties: { filename: { type: "STRING" }, content: { type: "STRING" } } },
+                        description: "List of generated files related to data privacy and security."
+                    },
+                    'customer-service-empathy': { 
+                        type: "ARRAY", 
+                        items: { type: "OBJECT", properties: { filename: { type: "STRING" }, content: { type: "STRING" } } },
+                        description: "List of generated files related to customer service and empathy."
+                    }
                 },
-                required: ["projectGoal", "provider", "config", "prompts", "tests"]
+                required: TEST_CATEGORIES
             };
 
-            // Simplified System Instruction (no optional user-defined system prompt)
-            const fullSystemInstruction = `You are an expert in LLM evaluation using the Promptfoo framework. Your task is to generate the necessary scaffolding files (YAML config, a sample prompt, and a sample test file) for the user's project goal. The final output must be a single, stringified JSON object conforming to the provided schema. The 'config' value must use 'openai:gpt-5-mini' as the default provider for portability, regardless of the user's prompt. 
+            const fullSystemInstruction = `You are an expert in LLM test project scaffolding. Your task is to generate a complete set of Promptfoo files for the user's project goal. The final output must be a single, stringified JSON object conforming to the provided schema, where the top-level keys are the fixed test categories: ${TEST_CATEGORIES.join(', ')}.
+            
+            For each category, generate 1-3 relevant files (promptfooconfig.yaml, prompt.txt, and/or tests.csv) that would be used to test that specific aspect of the AI assistant. 
             
             Project Goal: ${prompt}
             
-            Generate the content for the following files based on the project goal:
-            1. 'promptfooconfig.yaml': The main configuration file.
-            2. 'prompt.txt': A file containing the prompt template.
-            3. 'tests.csv': A file containing the test variables.
-            
-            Ensure the 'config' field contains valid, correctly formatted YAML content as a single string. Do not include markdown formatting (e.g., \`\`\`yaml) within the config string itself.`;
+            Ensure all file contents are correctly formatted (YAML for config, plain text/CSV for others). For the 'content' field, include the complete file content as a single string.`;
 
             const payload = {
-                contents: [{ parts: [{ text: `Generate Promptfoo scaffolding for the project described above.` }] }],
+                contents: [{ parts: [{ text: `Generate a structured test project based on the following goal: ${prompt}` }] }],
                 systemInstruction: { parts: [{ text: fullSystemInstruction }] },
                 generationConfig: {
                     responseMimeType: "application/json",
@@ -210,7 +233,7 @@
 
                 if (!response.ok) {
                     const errorDetails = await response.text();
-                    throw new Error(`API Error: ${response.status} - ${errorDetails.substring(0, 100)}...`);
+                    throw new Error(`API Error: ${response.status} - ${response.statusText}\nDetails: ${errorDetails.substring(0, 200)}...`);
                 }
 
                 const result = await response.json();
@@ -222,11 +245,13 @@
 
                 generatedArtifacts = JSON.parse(jsonText);
                 
-                // Format the raw output display (as a detail/backup view)
-                const displayContent = `Project Goal: ${generatedArtifacts.projectGoal}\n\n--- promptfooconfig.yaml ---\n${generatedArtifacts.config}\n\n--- prompt.txt ---\n${generatedArtifacts.prompts}\n\n--- tests.csv ---\n${generatedArtifacts.tests}`;
+                // Render the structured display
+                renderProjectStructure(generatedArtifacts);
+                
+                // Format the raw output display (for detail/backup view)
+                updateOutput(JSON.stringify(generatedArtifacts, null, 2));
 
-                updateOutput(displayContent);
-                showProjectStructure(generatedArtifacts); // Show the new structured display
+
                 showStatus('Project artifacts successfully generated. Ready for download!', 'success');
                 downloadButton.disabled = false;
 
@@ -242,7 +267,7 @@
             }
         }
 
-        // --- DOWNLOAD LOGIC (Uses a simple mock Zip functionality for demonstration) ---
+        // --- DOWNLOAD LOGIC (Now correctly combines content from all categories) ---
 
         function downloadArtifacts() {
             if (!generatedArtifacts) {
@@ -250,38 +275,30 @@
                 return;
             }
 
-            // This function simulates downloading a ZIP by logging file contents and simulating a link click.
-            console.log("--- Simulating ZIP File Generation ---");
-            console.log("File 1: promptfooconfig.yaml\n", generatedArtifacts.config);
-            console.log("File 2: prompt.txt\n", generatedArtifacts.prompts);
-            console.log("File 3: tests.csv\n", generatedArtifacts.tests);
-            console.log("-------------------------------------");
+            let zipContent = '--- GENERATED PROJECT ARTIFACTS ---\n\n';
+            let totalFiles = 0;
 
-            showStatus("Download simulated. Please check the 'Generated Output' for artifact content.", 'info');
-
-            // Actual file creation/download logic would go here.
-            // Since we cannot generate multiple files or ZIPs in this environment, 
-            // we will create a text file containing all artifacts for review.
+            TEST_CATEGORIES.forEach(category => {
+                const files = generatedArtifacts[category] || [];
+                if (files.length > 0) {
+                    zipContent += `\n\n### Folder: ${category} (${files.length} Files) ###\n`;
+                    files.forEach(file => {
+                        totalFiles++;
+                        zipContent += `\n\n--- File: ${category}/${file.filename} ---\n`;
+                        zipContent += file.content + '\n';
+                    });
+                }
+            });
             
-            const zipContent = 
-`--- Project Goal ---
-${generatedArtifacts.projectGoal}
-
---- promptfooconfig.yaml ---
-${generatedArtifacts.config}
-
---- prompt.txt ---
-${generatedArtifacts.prompts}
-
---- tests.csv ---
-${generatedArtifacts.tests}`;
+            console.log(`--- Simulating ZIP File Generation: ${totalFiles} total files ---`);
+            showStatus(`Download simulated. Generating a single text file containing all ${totalFiles} artifacts.`, 'info');
 
             const blob = new Blob([zipContent], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'llm-project-artifacts.txt'; // Download as a single text file for simplicity
+            a.download = 'llm-project-artifacts-structured.txt';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
