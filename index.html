@@ -102,11 +102,13 @@
         let structuredTestData = null;
         
         // --- LLM Test Categories ---
+        // NOTE: This now includes five universally useful categories.
         const TEST_CATEGORIES = {
             Accuracy_Grounding: { name: "domain-and-financial-factuality", description: "Focuses on factual correctness and retrieval of specific domain knowledge (RAG)." },
             Safety_Compliance: { name: "regulatory-compliance-adherence", description: "Ensures adherence to ethical guidelines, regulatory rules, and refusal of harmful/private requests (e.g., no financial advice)." },
             Injection_Jailbreaking: { name: "data-privacy-security", description: "Tests robustness against adversarial prompts designed to leak system instructions or bypass guardrails." },
-            UX_Error_Handling: { name: "customer-service-empathy", description: "Evaluates the chatbot's conversational quality, tone, empathy, and graceful handling of irrelevant or confusing inputs." }
+            UX_Error_Handling: { name: "customer-service-empathy", description: "Evaluates the chatbot's conversational quality, tone, empathy, and graceful handling of irrelevant or confusing inputs." },
+            Efficiency_Performance: { name: "performance-and-efficiency", description: "Tests the model's speed, token usage efficiency, and responsiveness under various load conditions." }
         };
         const CATEGORY_KEYS = Object.keys(TEST_CATEGORIES);
 
@@ -184,10 +186,7 @@
                 Your task is to take a set of unstructured test requirements and convert them into a highly structured JSON object, categorized by testing area.
                 
                 The required test categories, which MUST be used exactly as provided, are:
-                - Accuracy_Grounding: ${TEST_CATEGORIES.Accuracy_Grounding.description}
-                - Safety_Compliance: ${TEST_CATEGORIES.Safety_Compliance.description}
-                - Injection_Jailbreaking: ${TEST_CATEGORIES.Injection_Jailbreaking.description}
-                - UX_Error_Handling: ${TEST_CATEGORIES.UX_Error_Handling.description}
+                ${CATEGORY_KEYS.map(key => `- ${key}: ${TEST_CATEGORIES[key].description}`).join('\n')}
 
                 For each requirement, you must create a specific 'prompt' and a clear 'expectedOutputAssertion' suitable for automated testing frameworks like Promptfoo. Only include the JSON object in your response.
             `;
@@ -276,7 +275,15 @@
             let html = '<p class="font-semibold text-lg mb-3 text-fintech-blue">Test Project Ready</p>';
             html += '<p class="mb-4">The following structured project folders and files are ready to be downloaded:</p>';
 
-            structuredTestData.forEach(categoryData => {
+            // New logic (Plan A): Only display categories that contain at least one artifact
+            const categoriesWithArtifacts = structuredTestData.filter(data => data.artifacts.length > 0);
+
+            if (categoriesWithArtifacts.length === 0) {
+                 document.getElementById('summaryOutput').innerHTML = "<p class='text-red-500'>No test artifacts were generated. Please refine your requirements.</p>";
+                return;
+            }
+
+            categoriesWithArtifacts.forEach(categoryData => {
                 const categoryKey = categoryData.category;
                 const categoryName = TEST_CATEGORIES[categoryKey]?.name || categoryKey;
                 const artifactsCount = categoryData.artifacts.length;
@@ -332,6 +339,7 @@ tests:
                 const folderName = TEST_CATEGORIES[categoryKey]?.name || categoryKey.toLowerCase();
                 const artifacts = categoryData.artifacts;
                 
+                // This check ensures empty folders are not included in the ZIP
                 if (artifacts.length === 0) return;
 
                 // Create the main category folder
