@@ -19,17 +19,21 @@
         <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">LLM Project Artifact Generator</h1>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Input Card -->
+            <!-- Input Card (Updated) -->
             <div class="card p-6 rounded-xl col-span-2 space-y-5">
+                
+                <!-- NEW: Gemini API Key Input -->
+                <div class="space-y-2">
+                    <label for="apiKeyInput" class="block text-sm font-medium text-gray-700">Gemini API Key</label>
+                    <input type="password" id="apiKeyInput" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" placeholder="Paste your Gemini API Key here (starts with 'AIza...')" />
+                </div>
+                
                 <div class="space-y-2">
                     <label for="promptInput" class="block text-sm font-medium text-gray-700">Project Prompt / Goal</label>
-                    <textarea id="promptInput" rows="5" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" placeholder="e.g., Write a 500-word essay about the impact of generative AI on creative jobs, focusing on artists and writers."></textarea>
+                    <textarea id="promptInput" rows="7" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" placeholder="e.g., Write a 500-word essay about the impact of generative AI on creative jobs, focusing on artists and writers."></textarea>
                 </div>
 
-                <div class="space-y-2">
-                    <label for="systemInstruction" class="block text-sm font-medium text-gray-700">System Instruction (Optional)</label>
-                    <textarea id="systemInstruction" rows="3" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" placeholder="e.g., You are a meticulous English professor. Your output must be formal and structured."></textarea>
-                </div>
+                <!-- Removed System Instruction Input -->
             </div>
             
             <!-- Actions/Output Card -->
@@ -54,17 +58,13 @@
     </div>
 
     <script>
-        // Global variables for Firebase auth are defined in the Canvas environment but not used in this app.
-        // We set the API key to an empty string, which allows the Canvas environment to inject the real, secure key at runtime.
-        const apiKey = "";
-        
-        // --- CONSTANTS ---
+        // Global constant for the model
         const GENERATION_MODEL = 'gemini-2.5-flash-preview-09-2025';
-        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GENERATION_MODEL}:generateContent?key=${apiKey}`;
 
         // --- DOM ELEMENTS ---
+        const apiKeyInput = document.getElementById('apiKeyInput');
         const promptInput = document.getElementById('promptInput');
-        const systemInstruction = document.getElementById('systemInstruction');
+        // systemInstruction is removed
         const analyzeButton = document.getElementById('analyzeButton');
         const buttonText = document.getElementById('buttonText');
         const loadingSpinner = document.getElementById('loadingSpinner');
@@ -103,14 +103,20 @@
 
         async function handleAnalyzeProject() {
             const prompt = promptInput.value.trim();
-            const system = systemInstruction.value.trim();
+            const apiKey = apiKeyInput.value.trim(); // Read the API Key
+
+            if (!apiKey) {
+                showStatus('Please enter your Gemini API Key to run the analysis.', 'error');
+                return;
+            }
 
             if (!prompt) {
                 showStatus('Please enter a project prompt/goal.', 'error');
                 return;
             }
 
-            // The API Key check is now removed because the environment injects it.
+            // Construct API URL with user-provided key
+            const API_URL_WITH_KEY = `https://generativelanguage.googleapis.com/v1beta/models/${GENERATION_MODEL}:generateContent?key=${apiKey}`;
             
             showLoading(true);
             updateOutput('Awaiting response from Gemini...');
@@ -132,11 +138,10 @@
                 required: ["projectGoal", "provider", "config", "prompts", "tests"]
             };
 
+            // Simplified System Instruction (no optional user-defined system prompt)
             const fullSystemInstruction = `You are an expert in LLM evaluation using the Promptfoo framework. Your task is to generate the necessary scaffolding files (YAML config, a sample prompt, and a sample test file) for the user's project goal. The final output must be a single, stringified JSON object conforming to the provided schema. The 'config' value must use 'openai:gpt-5-mini' as the default provider for portability, regardless of the user's prompt. 
             
             Project Goal: ${prompt}
-            
-            ${system ? `Additional System Instruction: ${system}` : ''}
             
             Generate the content for the following files based on the project goal:
             1. 'promptfooconfig.yaml': The main configuration file.
@@ -155,7 +160,8 @@
             };
 
             try {
-                const response = await fetch(API_URL, {
+                // Use the API URL with the key provided by the user input
+                const response = await fetch(API_URL_WITH_KEY, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -194,7 +200,6 @@
         }
 
         // --- DOWNLOAD LOGIC (Uses a simple mock Zip functionality for demonstration) ---
-        // In a real browser environment, a library like JSZip would be required, but here we simulate the file creation.
 
         function downloadArtifacts() {
             if (!generatedArtifacts) {
