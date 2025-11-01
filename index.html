@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI QA Project Generator</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          'fintech-blue': '#1e3a8a',
+          'fintech-light': '#3b82f6',
+          'fintech-dark': '#0f172a',
+        },
+        fontFamily: {
+          sans: ['Inter', 'sans-serif'],
+        }
+      }
+    }
+  }
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen p-4 sm:p-8 font-sans">
+
+<div class="max-w-4xl mx-auto">
+  <header class="text-center mb-8">
+    <h1 class="text-3xl sm:text-4xl font-extrabold text-fintech-dark">AI QA Project <span class="text-fintech-blue">Generator</span></h1>
+    <p class="text-gray-500 mt-2">Convert raw requirements into a structured, ready-to-use LLM testing project.</p>
+  </header>
+
+  <!-- Step 0: OpenAI API Key -->
+  <div class="card bg-white p-6 rounded-xl border border-gray-200 mb-6">
+    <label class="block font-semibold text-fintech-dark mb-2">OpenAI API Key:</label>
+    <input type="password" id="apiKeyInput" placeholder="Paste your OpenAI API Key here"
+      class="w-full p-3 border border-gray-300 rounded-lg focus:ring-fintech-blue focus:border-fintech-blue">
+  </div>
+
+  <!-- Step 1: Input Requirements -->
+  <div class="card bg-white p-6 rounded-xl border border-gray-200 mb-6">
+    <label class="block font-semibold text-fintech-dark mb-2">Step 1: Paste Your Requirements / Prompts</label>
+    <textarea id="requirementsInput" rows="14"
+      class="w-full p-3 border border-gray-300 rounded-lg focus:ring-fintech-blue focus:border-fintech-blue transition duration-150"></textarea>
+  </div>
+
+  <!-- Step 2: Generate -->
+  <div class="mb-6">
+    <button onclick="generateProject()" class="w-full sm:w-auto px-6 py-3 bg-fintech-blue text-white font-semibold rounded-lg hover:bg-fintech-light transition duration-200">
+      Generate Project
+    </button>
+  </div>
+
+  <!-- Step 3: Download & Preview -->
+  <div id="outputCard" class="card bg-white p-6 rounded-xl border border-gray-200 hidden">
+    <h2 class="text-xl font-semibold mb-4 text-fintech-dark">Generated Project Preview</h2>
+    <div id="previewOutput" class="mb-4 p-4 bg-gray-50 rounded-lg text-sm border border-gray-200"></div>
+    <button onclick="downloadProject()" class="w-full sm:w-auto px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition duration-200">
+      Download Project (.zip)
+    </button>
+  </div>
+</div>
+
+<script type="module">
+  let promptsData = [];
+
+  function determineRubric(text) {
+    text = text.toLowerCase();
+    if (text.includes("bias")) return "llm-rubric: the response should not contain any bias";
+    if (text.includes("factuality") || text.includes("factually correct")) return "llm-rubric: the response should be factually correct and verifiable";
+    if (text.includes("hallucination")) return "llm-rubric: the response should not contain fabricated or false information";
+    if (text.includes("accuracy")) return "llm-rubric: the response should be accurate and based on reliable knowledge";
+    if (text.includes("professional")) return "llm-rubric: the response should maintain a professional tone appropriate for workplace communication";
+    if (text.includes("polite")) return "llm-rubric: the response should be polite and respectful in tone";
+    if (text.includes("personable")) return "llm-rubric: the response should be warm and engaging in tone";
+    if (text.includes("friendly")) return "llm-rubric: the response should be friendly and approachable in tone";
+    return "llm-rubric: the response should be relevant and coherent";
+  }
+
+  async function generateProject() {
+    const requirements = document.getElementById("requirementsInput").value.trim();
+    const apiKey = document.getElementById("apiKeyInput").value.trim();
+    if (!requirements || !apiKey) {
+      alert("Please enter requirements and OpenAI API key.");
+      return;
+    }
+
+    const systemPrompt = `You are an AI QA engineer. Generate separate LLM evaluation prompts based on the user's input requirements. Return a JSON array of strings, each string is a single prompt.`;
+    const userPrompt = `Generate multiple distinct LLM evaluation prompts based on this instruction:\n${requirements}`;
+
+    try {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          max_tokens: 600
+        })
+      });
+
+      const data = await response.json();
+      let text = data.choices?.[0]?.message?.content || "";
+      // Expecting JSON array from GPT
+      try { promptsData = JSON.parse(text); } catch { 
+        // fallback: split by lines if JSON parse fails
+        promptsData = text.split("\n").filter(l => l.trim() !== "");
+      }
+
+      displayPreview();
+
+    } catch (err) {
+      console.error(err);
+      alert("Failed to generate prompts. Check the console.");
+    }
+  }
+
+  function displayPreview() {
+    if (!promptsData.length) return;
+
+    const rubric = determineRubric(document.getElementById("requirementsInput").value);
+    let html = "<table class='w-full text-left border-collapse'><tr><th class='border-b px-2 py-1'>Question / Prompt</th><th class='border-b px-2 py-1'>Rubric (__expected)</th></tr>";
+    promptsData.forEach(p => {
+      html += `<tr><td class='border-b px-2 py-1'>${p}</td><td class='border-b px-2 py-1'>${rubric}</td></tr>`;
+    });
+    html += "</table>";
+    document.getElementById("previewOutput").innerHTML = html;
+    document.getElementById("outputCard").classList.remove("hidden");
+  }
+
+  function downloadProject() {
+    const zip = new JSZip();
+    const root = zip.folder("MINEVAL");
+    const rubric = determineRubric(document.getElementById("requirementsInput").value);
+
+    // YAML
+    root.file("promptfooconfig.yaml", `prompts:\n  - file://prompts/prompt.txt\ntests:\n  - file://tests/basic_tests.csv`);
+
+    // TXT
+    root.file("prompts/prompt.txt", `You are a helpful assistant that provides accurate and concise answers to questions.\n\nQuestion: {{question}}\n\nPlease provide a clear and accurate answer.`);
+
+    // CSV
+    let csvContent = "question,__expected\n";
+    promptsData.forEach(p => {
+      const q = p.replace(/"/g, '""'); // escape quotes
+      csvContent += `"${q}","${rubric}"\n`;
+    });
+    const testsFolder = root.folder("tests");
+    testsFolder.file("basic_tests.csv", csvContent);
+
+    zip.generateAsync({ type: "blob" }).then(function (content) {
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(content);
+      link.download = "MINEVAL.zip";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    });
+  }
+
+</script>
+</body>
+</html>
